@@ -17,4 +17,5 @@ Analyze news headlines and articles for misinformation patterns using NLP-based 
 HTML | CSS | JavaScript
 
 ## Live Demo
+https://raghavshikriwal.github.io/fake-news-detector/
 
