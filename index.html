@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fake News Detector</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #0f0f1a; color: white; min-height: 100vh; padding: 20px; }
+        .container { max-width: 700px; margin: 0 auto; }
+        h1 { text-align: center; color: #ff4757; margin-bottom: 5px; font-size: 26px; }
+        .subtitle { text-align: center; color: #888; margin-bottom: 30px; font-size: 14px; }
+        .input-box { background: #1a1a2e; border-radius: 12px; padding: 25px; margin-bottom: 20px; }
+        textarea { width: 100%; padding: 12px; background: #0f0f1a; border: 1px solid #333; border-radius: 8px; color: white; font-size: 14px; resize: vertical; margin-bottom: 15px; }
+        button { width: 100%; padding: 14px; background: #ff4757; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #cc3344; }
+        .result { background: #1a1a2e; border-radius: 12px; padding: 25px; display: none; }
+        .score-circle { width: 120px; height: 120px; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; flex-direction: column; font-size: 32px; font-weight: bold; border: 4px solid; }
+        .verdict { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 20px; }
+        .flags { margin-top: 15px; }
+        .flag { background: #0f0f1a; border-radius: 8px; padding: 10px 15px; margin-bottom: 8px; font-size: 13px; border-left: 3px solid #ff4757; }
+        .flag.good { border-left-color: #00ff88; }
+        .meter { height: 10px; background: #333; border-radius: 5px; margin-bottom: 20px; overflow: hidden; }
+        .meter-fill { height: 100%; border-radius: 5px; transition: width 0.8s ease; }
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .stat { background: #0f0f1a; border-radius: 8px; padding: 12px; text-align: center; }
+        .stat-num { font-size: 22px; font-weight: bold; color: #ff4757; }
+        .stat-label { font-size: 11px; color: #888; margin-top: 3px; }
+        .tips { margin-top: 20px; background: #0f0f1a; border-radius: 8px; padding: 15px; }
+        .tips h3 { color: #00d4ff; margin-bottom: 10px; font-size: 14px; }
+        .tips p { color: #aaa; font-size: 12px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Fake News Detector</h1>
+        <p class="subtitle">Analyze headlines and news for misinformation patterns</p>
+
+        <div class="input-box">
+            <label style="display:block; margin-bottom:8px; color:#aaa; font-size:13px;">Paste news headline or article text</label>
+            <textarea id="newsInput" rows="5" placeholder="e.g. SHOCKING: Scientists CONFIRM aliens visited Earth last night! Government hiding truth!!!"></textarea>
+            <button onclick="analyze()">🔍 Analyze Now</button>
+        </div>
+
+        <div class="result" id="result">
+            <div class="score-circle" id="scoreCircle">
+                <span id="scoreNum">0</span>
+                <span style="font-size:11px; font-weight:normal;">/ 100</span>
+            </div>
+            <div class="meter">
+                <div class="meter-fill" id="meterFill"></div>
+            </div>
+            <div class="verdict" id="verdict"></div>
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-num" id="sensationalCount">0</div>
+                    <div class="stat-label">Sensational Words</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-num" id="capsCount">0</div>
+                    <div class="stat-label">CAPS WORDS</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-num" id="punctCount">0</div>
+                    <div class="stat-label">!!! Punctuation</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-num" id="wordCount">0</div>
+                    <div class="stat-label">Total Words</div>
+                </div>
+            </div>
+
+            <div class="flags" id="flags"></div>
+
+            <div class="tips">
+                <h3>💡 How to verify this news</h3>
+                <p>1. Search the headline on Google News<br>
+                2. Check trusted sources like Reuters, BBC, AP News<br>
+                3. Look for the original source of the claim<br>
+                4. Check fact-checking sites like AltNews, Snopes<br>
+                5. Be skeptical of emotionally charged language</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sensationalWords = [
+            'shocking', 'bombshell', 'explosive', 'unbelievable', 'incredible',
+            'secret', 'hidden', 'exposed', 'leaked', 'banned', 'censored',
+            'they dont want you to know', 'mainstream media', 'deep state',
+            'miracle', 'cure', 'destroy', 'collapse', 'crisis', 'urgent',
+            'breaking', 'exclusive', 'confirmed', 'proof', 'hoax', 'scam',
+            'illuminati', 'conspiracy', 'cover-up', 'whistleblower', 'truth',
+            'wake up', 'share before deleted', 'going viral', 'must see',
+            'doctors hate', 'government hiding', 'they lied', 'never told',
+            'what they dont tell', 'real truth', 'finally exposed'
+        ];
+
+        const emotionalWords = [
+            'outrage', 'furious', 'disgusting', 'terrifying', 'horrifying',
+            'heartbreaking', 'devastating', 'alarming', 'dangerous', 'evil',
+            'corrupt', 'betrayal', 'shameful', 'pathetic', 'ridiculous'
+        ];
+
+        const credibleWords = [
+            'according to', 'study shows', 'research', 'published', 'journal',
+            'official', 'statement', 'confirmed by', 'data shows', 'survey'
+        ];
+
+        function analyze() {
+            const text = document.getElementById('newsInput').value.trim();
+            if (!text) return alert('Please enter some text!');
+
+            const lower = text.toLowerCase();
+            const words = text.split(/\s+/);
+
+            // Count metrics
+            let sensationalFound = [];
+            let emotionalFound = [];
+            let credibleFound = [];
+            let score = 0;
+
+            sensationalWords.forEach(w => { if (lower.includes(w)) { sensationalFound.push(w); score += 8; } });
+            emotionalWords.forEach(w => { if (lower.includes(w)) { emotionalFound.push(w); score += 5; } });
+            credibleWords.forEach(w => { if (lower.includes(w)) credibleFound.push(w); });
+
+            // CAPS words
+            const capsWords = words.filter(w => w.length > 2 && w === w.toUpperCase() && /[A-Z]/.test(w));
+            score += capsWords.length * 6;
+
+            // Punctuation
+            const exclamations = (text.match(/!/g) || []).length;
+            const questions = (text.match(/\?/g) || []).length;
+            score += exclamations * 5 + questions * 3;
+
+            // Credible sources reduce score
+            score -= credibleFound.length * 10;
+
+            // Cap score
+            score = Math.min(Math.max(score, 0), 100);
+
+            // Update UI
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('scoreNum').textContent = score;
+            document.getElementById('sensationalCount').textContent = sensationalFound.length;
+            document.getElementById('capsCount').textContent = capsWords.length;
+            document.getElementById('punctCount').textContent = exclamations + questions;
+            document.getElementById('wordCount').textContent = words.length;
+
+            // Score circle color
+            const circle = document.getElementById('scoreCircle');
+            const meter = document.getElementById('meterFill');
+            const verdict = document.getElementById('verdict');
+
+            if (score <= 25) {
+                circle.style.borderColor = '#00ff88';
+                circle.style.color = '#00ff88';
+                meter.style.background = '#00ff88';
+                verdict.style.color = '#00ff88';
+                verdict.textContent = '✅ Likely Trustworthy';
+            } else if (score <= 55) {
+                circle.style.borderColor = '#ffa502';
+                circle.style.color = '#ffa502';
+                meter.style.background = '#ffa502';
+                verdict.style.color = '#ffa502';
+                verdict.textContent = '⚠️ Suspicious — Verify This';
+            } else {
+                circle.style.borderColor = '#ff4757';
+                circle.style.color = '#ff4757';
+                meter.style.background = '#ff4757';
+                verdict.style.color = '#ff4757';
+                verdict.textContent = '🚨 Likely Fake News!';
+            }
+
+            meter.style.width = score + '%';
+
+            // Flags
+            const flagsDiv = document.getElementById('flags');
+            flagsDiv.innerHTML = '';
+
+            if (sensationalFound.length > 0) {
+                flagsDiv.innerHTML += `<div class="flag">🚩 Sensational words detected: <strong>${sensationalFound.slice(0,5).join(', ')}</strong></div>`;
+            }
+            if (capsWords.length > 0) {
+                flagsDiv.innerHTML += `<div class="flag">🚩 Excessive CAPS used: <strong>${capsWords.slice(0,4).join(', ')}</strong></div>`;
+            }
+            if (exclamations > 1) {
+                flagsDiv.innerHTML += `<div class="flag">🚩 Too many exclamation marks: <strong>${exclamations} found</strong></div>`;
+            }
+            if (emotionalFound.length > 0) {
+                flagsDiv.innerHTML += `<div class="flag">🚩 Emotionally charged language: <strong>${emotionalFound.slice(0,3).join(', ')}</strong></div>`;
+            }
+            if (credibleFound.length > 0) {
+                flagsDiv.innerHTML += `<div class="flag good">✅ Credible indicators found: <strong>${credibleFound.slice(0,3).join(', ')}</strong></div>`;
+            }
+            if (flagsDiv.innerHTML === '') {
+                flagsDiv.innerHTML = `<div class="flag good">✅ No major red flags detected</div>`;
+            }
+
+            document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
